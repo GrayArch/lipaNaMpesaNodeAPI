@@ -1,6 +1,8 @@
 // import the required packages
 const express = require('express');
 const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
+const axios = require('axios');
 
 // initialize the express app
 const app = express();
@@ -9,28 +11,47 @@ const app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// set up a simple GET request
-app.get('/', (req, res) => {
-    res.send('Welcome to the Express API');
+// define the mpesa model
+const mpesaSchema = new mongoose.Schema({
+    phoneNumber: String,
+    amount: Number,
+    description: String,
 });
 
-// set up a POST request
-app.post('/post-example', (req, res) => {
-    console.log(req.body);
-    res.send('Post request received');
+// initialize the model
+const Mpesa = mongoose.model('Mpesa', mpesaSchema);
+
+// connect to the mongo db database
+mongoose.connect('mongodb://localhost/mpesaDB', { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log('Connected to MongoDB'))
+    .catch(err => console.log('Failed to connect to MongoDB:', err));
+
+// set up a GET request to fetch all transactions
+app.get('/transactions', async (req, res) => {
+    const transactions = await Mpesa.find();
+    res.send(transactions);
 });
 
-// set up a PUT request
-app.put('/put-example/:id', (req, res) => {
-    console.log(req.params.id);
-    console.log(req.body);
-    res.send('Put request received');
+// set up a POST request to create a new transaction
+app.post('/transactions', async (req, res) => {
+    const newTransaction = new Mpesa(req.body);
+    const savedTransaction = await newTransaction.save();
+    res.send(savedTransaction);
 });
 
-// set up a DELETE request
-app.delete('/delete-example/:id', (req, res) => {
-    console.log(req.params.id);
-    res.send('Delete request received');
+// set up a GET request to fetch transaction details using the Dataja API
+app.get('/transaction/:id', async (req, res) => {
+    try {
+        const response = await axios.get(`https://api.daraja.com/v2/transactions/${req.params.id}`, {
+            headers: {
+                'Authorization': 'Bearer YOUR_DARAJA_API_KEY'
+            }
+        });
+        res.send(response.data);
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Error fetching transaction details from Daraja API');
+    }
 });
 
 // start the server
